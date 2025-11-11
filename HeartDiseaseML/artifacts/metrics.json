@@ -1,0 +1,38 @@
+{
+  "best_model": "RandomForest",
+  "cv_best_roc_auc": 0.955108,
+  "test": {
+    "accuracy": 0.928571,
+    "precision": 0.936,
+    "recall": 0.928571,
+    "f1": 0.932271,
+    "roc_auc": 0.978068,
+    "confusion_matrix": [
+      [
+        104,
+        8
+      ],
+      [
+        9,
+        117
+      ]
+    ]
+  },
+  "features": {
+    "numeric": [
+      "age",
+      "resting_bp_s",
+      "cholesterol",
+      "max_heart_rate",
+      "oldpeak"
+    ],
+    "categorical": [
+      "sex",
+      "chest_pain_type",
+      "fasting_blood_sugar",
+      "resting_ecg",
+      "exercise_angina",
+      "st_slope"
+    ]
+  }
+}
