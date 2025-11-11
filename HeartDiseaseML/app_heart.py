@@ -26,14 +26,21 @@ st.set_page_config(page_title="❤️ Heart Disease Prediction & Dashboard",
 st.title("❤️ Heart Disease Prediction & Dashboard")
 
 # ---------- Paths ----------
-ART = Path("artifacts")
+import os
+from pathlib import Path
+
+# Get current working directory (ensures Streamlit finds files)
+BASE_DIR = Path(__file__).resolve().parent
+ART = BASE_DIR / "artifacts"
+
 MODEL_PATH = ART / "heart_model.joblib"
 METRICS_PATH = ART / "metrics.json"
 TEST_DATA_PATH = ART / "test_data.csv"
 ROC_IMG = ART / "roc_curve.png"
 CM_IMG = ART / "confusion_matrix.png"
 FI_IMG = ART / "feature_importance.png"
-DATASET = Path("dataset.csv")
+DATASET = BASE_DIR / "dataset.csv"
+
 
 # ---------- Load assets ----------
 @st.cache_resource
@@ -256,3 +263,4 @@ elif page == "📁 Data Preview":
             st.json({c: str(data_df[c].dtype) for c in data_df.columns})
     st.markdown("---")
     st.caption("Note: Column names are normalized to snake_case during training.")
+
