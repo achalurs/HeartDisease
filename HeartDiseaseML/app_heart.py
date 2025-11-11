@@ -1,12 +1,13 @@
-# app.py
+# app_heart.py
 # ------------------------------------------------------------
 # Streamlit app with:
 #   • 📊 Dashboard (metrics, ROC, CM, feature importance, CV table)
-#   • 📄 "Generate & Download EDA Report" (HTML + PDF)  ← uses edareport.py
+#   • 📄 Generate & Download EDA Report (HTML + PDF) — uses eda_report.py
 #   • 🔮 Predict (single patient form)
 #   • 📁 Data Preview
+# Includes: auto-retrain if artifacts are missing.
 #
-# Run:  streamlit run app.py
+# Run:  streamlit run app_heart.py
 # ------------------------------------------------------------
 
 from pathlib import Path
@@ -16,8 +17,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
 import joblib
+import subprocess, sys, time
 
-# EDA report helpers
+# EDA report helpers (make sure eda_report.py is in the same folder)
 from eda_report import build_eda_report_html, build_pdf_from_images
 
 # ---------- App setup ----------
@@ -25,11 +27,7 @@ st.set_page_config(page_title="❤️ Heart Disease Prediction & Dashboard",
                    page_icon="❤️", layout="wide")
 st.title("❤️ Heart Disease Prediction & Dashboard")
 
-# ---------- Paths ----------
-import os
-from pathlib import Path
-
-# Get current working directory (ensures Streamlit finds files)
+# ---------- Paths (robust on local & cloud) ----------
 BASE_DIR = Path(__file__).resolve().parent
 ART = BASE_DIR / "artifacts"
 
@@ -41,8 +39,7 @@ CM_IMG = ART / "confusion_matrix.png"
 FI_IMG = ART / "feature_importance.png"
 DATASET = BASE_DIR / "dataset.csv"
 
-
-# ---------- Load assets ----------
+# ---------- Cache loaders ----------
 @st.cache_resource
 def load_model():
     return joblib.load(MODEL_PATH) if MODEL_PATH.exists() else None
@@ -64,13 +61,36 @@ def load_dataset():
         return df
     return None
 
+# ---------- Auto-retrain if artifacts are missing ----------
+def ensure_model():
+    """If artifacts/heart_model.joblib is missing, run train_heart.py once."""
+    if not MODEL_PATH.exists():
+        st.warning("Model artifacts not found — training now (one-time)…")
+        try:
+            subprocess.check_call([sys.executable, str(BASE_DIR / "train_heart.py")])
+            time.sleep(0.5)
+            # Clear cached model so Streamlit reloads the freshly trained one
+            try:
+                load_model.clear()     # cache_resource
+                load_metrics.clear()   # cache_data
+                load_test_data.clear() # cache_data
+            except Exception:
+                pass
+        except Exception as e:
+            st.error(f"Auto-training failed: {e}")
+            st.stop()
+
+# Ensure artifacts exist (may run once)
+ensure_model()
+
+# ---------- Load everything ----------
 pipe = load_model()
 metrics = load_metrics()
 test_df = load_test_data()
 data_df = load_dataset()
 
 if pipe is None:
-    st.error("Model not found. Run `python train_heart.py` to generate ./artifacts first.")
+    st.error("Model not found and auto-training did not succeed. Check logs.")
     st.stop()
 
 # Feature schema (must match training script)
@@ -119,7 +139,7 @@ if page == "📊 Dashboard":
         if FI_IMG.exists():
             st.image(str(FI_IMG))
         else:
-            st.caption("Feature importance available for tree-based models (e.g., RandomForest).")
+            st.caption("Feature importance is available for tree-based models (e.g., RandomForest).")
     with cR2:
         st.markdown("**Cross-Validation (ROC-AUC)**")
         cv_path = ART / "cv_results.csv"
@@ -158,8 +178,7 @@ if page == "📊 Dashboard":
         plt.plot(fpr, tpr, label="ROC")
         plt.plot([0, 1], [0, 1], linestyle="--")
         # mark chosen threshold
-        import numpy as _np
-        idx = int(_np.argmin(_np.abs(thresholds - thr)))
+        idx = int(np.argmin(np.abs(thresholds - thr)))
         plt.scatter([fpr[idx]], [tpr[idx]])
         plt.title("ROC Curve (test) with threshold marker")
         plt.xlabel("False Positive Rate"); plt.ylabel("True Positive Rate")
@@ -169,16 +188,15 @@ if page == "📊 Dashboard":
     # ---------- EDA REPORT (HTML + PDF) ----------
     st.markdown("---")
     st.markdown("### 📄 Generate & Download EDA Report")
-    st.caption("Creates a single-file HTML report, and a multi-page PDF. (Requires seaborn, reportlab)")
+    st.caption("Creates a single-file HTML report and a multi-page PDF. (Requires seaborn, reportlab)")
 
     if data_df is None:
         st.info("dataset.csv not found — place it next to this script.")
     else:
         if st.button("Generate EDA Report"):
             with st.spinner("Building EDA report..."):
-                html, ordered_images = build_eda_report_html(data_df)      # from edareport.py
-                pdf_bytes = build_pdf_from_images(ordered_images,
-                                                  title="Heart Disease — EDA Report")
+                html, ordered_images = build_eda_report_html(data_df)
+                pdf_bytes = build_pdf_from_images(ordered_images, title="Heart Disease — EDA Report")
                 st.session_state["eda_html"] = html
                 st.session_state["eda_pdf"] = pdf_bytes
             st.success("EDA report generated!")
@@ -263,4 +281,3 @@ elif page == "📁 Data Preview":
             st.json({c: str(data_df[c].dtype) for c in data_df.columns})
     st.markdown("---")
     st.caption("Note: Column names are normalized to snake_case during training.")
-
